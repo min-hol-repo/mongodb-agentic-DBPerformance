@@ -1,0 +1,32 @@
+{
+  "name": "@demo/worker-actuator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=../../.env src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@agendajs/mongo-backend": "^4.0.3",
+    "@demo/shared": "workspace:*",
+    "@demo/worker-utils": "workspace:*",
+    "agenda": "^6.2.6",
+    "dotenv": "^16.4.0",
+    "prom-client": "^15.1.0",
+    "tsx": "^4.9.0"
+  },
+  "devDependencies": {
+    "@demo/rules": "workspace:*",
+    "@types/node": "^20.0.0",
+    "mongodb": "^6.6.0",
+    "mongodb-memory-server": "^11.2.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.9"
+  }
+}

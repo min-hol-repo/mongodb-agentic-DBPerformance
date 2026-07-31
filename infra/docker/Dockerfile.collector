@@ -1,0 +1,36 @@
+FROM node:20-alpine AS base
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+
+FROM base AS deps
+WORKDIR /app
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY workers/collector/package.json ./workers/collector/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/atlas/package.json ./packages/atlas/
+RUN pnpm install --frozen-lockfile
+
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/workers/collector/node_modules ./workers/collector/node_modules
+COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=deps /app/packages/atlas/node_modules ./packages/atlas/node_modules
+COPY tsconfig.base.json ./
+COPY packages/shared ./packages/shared
+COPY packages/atlas ./packages/atlas
+COPY workers/collector ./workers/collector
+RUN pnpm --filter @demo/shared build
+RUN pnpm --filter @demo/atlas build
+RUN pnpm --filter @demo/worker-collector build
+
+FROM base AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=builder /app/packages/atlas/dist ./packages/atlas/dist
+COPY --from=builder /app/packages/atlas/package.json ./packages/atlas/package.json
+COPY --from=builder /app/workers/collector/dist ./dist
+EXPOSE 4010
+CMD ["node", "dist/index.js"]

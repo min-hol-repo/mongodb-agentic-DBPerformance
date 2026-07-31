@@ -1,0 +1,213 @@
+{
+  "title": "Agentic Performance Demo",
+  "uid": "agentic-demo",
+  "version": 3,
+  "schemaVersion": 38,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "tags": ["agentic", "demo"],
+  "panels": [
+
+    { "id": 100, "type": "row", "title": "API", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }, "collapsed": false },
+
+    {
+      "id": 1, "title": "API Request Rate (req/s)", "type": "timeseries",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "min": 0 } },
+      "targets": [{ "expr": "sum(rate(api_http_requests_total[1m])) by (route)", "legendFormat": "{{ route }}" }]
+    },
+    {
+      "id": 2, "title": "API Latency p50/p95/p99 (s)", "type": "timeseries",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0 } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(api_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(api_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, sum(rate(api_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p99" }
+      ]
+    },
+    {
+      "id": 3, "title": "API Error Rate (4xx+5xx / s)", "type": "timeseries",
+      "gridPos": { "h": 7, "w": 4, "x": 16, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "min": 0 },
+        "overrides": [{ "matcher": { "id": "byName", "options": "errors" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }]
+      },
+      "targets": [{ "expr": "sum(rate(api_http_errors_total[1m]))", "legendFormat": "errors" }]
+    },
+    {
+      "id": 4, "title": "In-Flight Requests", "type": "stat",
+      "gridPos": { "h": 7, "w": 4, "x": 20, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "api_http_requests_in_flight", "legendFormat": "in-flight" }]
+    },
+
+    { "id": 200, "type": "row", "title": "Collector", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 8 }, "collapsed": false },
+
+    {
+      "id": 21, "title": "Collector Run Rate (/min)", "type": "timeseries",
+      "gridPos": { "h": 7, "w": 6, "x": 0, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0 } },
+      "targets": [{ "expr": "rate(collector_run_total[1m]) * 60", "legendFormat": "runs/min" }]
+    },
+    {
+      "id": 22, "title": "Collector Run Duration p95 (s)", "type": "timeseries",
+      "gridPos": { "h": 7, "w": 6, "x": 6, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0 } },
+      "targets": [{ "expr": "histogram_quantile(0.95, rate(collector_run_duration_seconds_bucket[5m]))", "legendFormat": "p95" }]
+    },
+    {
+      "id": 23, "title": "Collector Failure Rate", "type": "stat",
+      "gridPos": { "h": 7, "w": 4, "x": 12, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "rate(collector_run_failures_total[5m]) / (rate(collector_run_total[5m]) + 0.001)", "legendFormat": "failure rate" }]
+    },
+    {
+      "id": 24, "title": "Collector Queue Depth", "type": "timeseries",
+      "gridPos": { "h": 7, "w": 4, "x": 16, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0 } },
+      "targets": [
+        { "expr": "collector_queue_depth{state=\"waiting\"}", "legendFormat": "waiting" },
+        { "expr": "collector_queue_depth{state=\"active\"}",  "legendFormat": "active"  }
+      ]
+    },
+    {
+      "id": 25, "title": "Inserted / Failure (1h)", "type": "stat",
+      "gridPos": { "h": 7, "w": 4, "x": 20, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "increase(collector_inserted_total[1h])",       "legendFormat": "inserted" },
+        { "expr": "increase(collector_run_failures_total[1h])",   "legendFormat": "failures" }
+      ]
+    },
+
+    { "id": 300, "type": "row", "title": "Detector", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 }, "collapsed": false },
+
+    {
+      "id": 31, "title": "Detector Events / hour (by type)", "type": "timeseries",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 17 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0 } },
+      "targets": [{ "expr": "increase(detector_events_total[1h])", "legendFormat": "{{ type }} / {{ severity }}" }]
+    },
+    {
+      "id": 32, "title": "Detector Run Duration p95 (s)", "type": "timeseries",
+      "gridPos": { "h": 7, "w": 6, "x": 8, "y": 17 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0 } },
+      "targets": [{ "expr": "histogram_quantile(0.95, rate(detector_run_duration_seconds_bucket[5m]))", "legendFormat": "p95" }]
+    },
+    {
+      "id": 33, "title": "Detector Queue Depth", "type": "timeseries",
+      "gridPos": { "h": 7, "w": 4, "x": 14, "y": 17 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0 } },
+      "targets": [
+        { "expr": "detector_queue_depth{state=\"waiting\"}", "legendFormat": "waiting" },
+        { "expr": "detector_queue_depth{state=\"active\"}",  "legendFormat": "active"  }
+      ]
+    },
+    {
+      "id": 34, "title": "Open Events (current)", "type": "stat",
+      "gridPos": { "h": 7, "w": 3, "x": 18, "y": 17 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "sum(detector_open_events)", "legendFormat": "open" }]
+    },
+    {
+      "id": 35, "title": "Auto-Resolved (1h)", "type": "stat",
+      "gridPos": { "h": 7, "w": 3, "x": 21, "y": 17 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "increase(detector_events_resolved_total[1h])", "legendFormat": "resolved" }]
+    },
+
+    { "id": 400, "type": "row", "title": "Actuator", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 }, "collapsed": false },
+
+    {
+      "id": 41, "title": "Actuator Actions by Mode (1h)", "type": "timeseries",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0 } },
+      "targets": [{ "expr": "increase(actuator_actions_total[1h])", "legendFormat": "{{ action_type }} / {{ mode }}" }]
+    },
+    {
+      "id": 42, "title": "Actuator Run Duration p95 (s)", "type": "timeseries",
+      "gridPos": { "h": 7, "w": 6, "x": 8, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0 } },
+      "targets": [{ "expr": "histogram_quantile(0.95, rate(actuator_run_duration_seconds_bucket[5m]))", "legendFormat": "p95" }]
+    },
+    {
+      "id": 43, "title": "Actuator Queue Depth", "type": "timeseries",
+      "gridPos": { "h": 7, "w": 4, "x": 14, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0 } },
+      "targets": [
+        { "expr": "actuator_queue_depth{state=\"waiting\"}", "legendFormat": "waiting" },
+        { "expr": "actuator_queue_depth{state=\"active\"}",  "legendFormat": "active"  }
+      ]
+    },
+    {
+      "id": 44, "title": "Approvals / Rejections (1h)", "type": "stat",
+      "gridPos": { "h": 7, "w": 3, "x": 18, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "increase(actuator_approvals_total{decision=\"approved\"}[1h])", "legendFormat": "approved" },
+        { "expr": "increase(actuator_approvals_total{decision=\"rejected\"}[1h])", "legendFormat": "rejected" }
+      ]
+    },
+    {
+      "id": 45, "title": "Skipped Actions (1h)", "type": "stat",
+      "gridPos": { "h": 7, "w": 3, "x": 21, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "increase(actuator_actions_skipped_total[1h])", "legendFormat": "{{ reason }}" }]
+    },
+
+    { "id": 500, "type": "row", "title": "System", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 }, "collapsed": false },
+
+    {
+      "id": 51, "title": "Heap Memory Used (MB)", "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 33 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "decmbytes", "min": 0 } },
+      "targets": [
+        { "expr": "api_nodejs_heap_size_used_bytes / 1024 / 1024",                          "legendFormat": "api" },
+        { "expr": "collector_process_nodejs_heap_size_used_bytes / 1024 / 1024",            "legendFormat": "collector" },
+        { "expr": "detector_process_nodejs_heap_size_used_bytes / 1024 / 1024",             "legendFormat": "detector" },
+        { "expr": "actuator_process_nodejs_heap_size_used_bytes / 1024 / 1024",             "legendFormat": "actuator" }
+      ]
+    },
+    {
+      "id": 52, "title": "Event Loop Lag p99 (ms)", "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 33 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ms", "min": 0 } },
+      "targets": [
+        { "expr": "api_nodejs_eventloop_lag_p99_seconds * 1000",                "legendFormat": "api" },
+        { "expr": "collector_process_nodejs_eventloop_lag_p99_seconds * 1000",  "legendFormat": "collector" },
+        { "expr": "detector_process_nodejs_eventloop_lag_p99_seconds * 1000",   "legendFormat": "detector" },
+        { "expr": "actuator_process_nodejs_eventloop_lag_p99_seconds * 1000",   "legendFormat": "actuator" }
+      ]
+    }
+
+  ]
+}

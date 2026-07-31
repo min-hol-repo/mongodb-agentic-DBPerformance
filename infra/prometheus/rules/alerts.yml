@@ -1,0 +1,197 @@
+# ── Alert Rules ──────────────────────────────────────────────────
+# 데모 환경에 적합한 기본 알림 규칙.
+# severity 레이블: critical (즉각 대응), warning (확인 필요), info (정보성)
+#
+# 실제 운영 환경에서는 Alertmanager 와 연동해
+# Slack / PagerDuty 등으로 라우팅한다.
+
+groups:
+
+  # ── 서비스 가용성 ─────────────────────────────────────────────────
+  - name: availability
+    rules:
+      # Prometheus가 스크레이프에 실패하면 해당 서비스 다운으로 판단
+      - alert: ServiceDown
+        expr: up == 0
+        for:  2m
+        labels:
+          severity: critical
+        annotations:
+          summary:     "{{ $labels.job }} is down"
+          description: >
+            Prometheus cannot scrape {{ $labels.job }} (instance={{ $labels.instance }}).
+            The service may be crashed or unreachable.
+            Check: docker logs demo-{{ $labels.job }}
+
+  # ── API 성능 ──────────────────────────────────────────────────────
+  - name: api_performance
+    rules:
+      # 에러율 5% 초과 (1분 슬라이딩 윈도우)
+      - alert: HighApiErrorRate
+        expr: job:api_http_error_ratio:rate1m > 0.05
+        for:  3m
+        labels:
+          severity: warning
+        annotations:
+          summary:     "API error rate is {{ $value | humanizePercentage }}"
+          description: >
+            API 4xx/5xx error rate has exceeded 5% for 3 minutes.
+            Current rate: {{ $value | humanizePercentage }}.
+            Check API logs for root cause.
+
+      # p95 latency 1초 초과
+      - alert: HighApiLatency
+        expr: job:api_http_request_duration_seconds:p95_5m > 1.0
+        for:  5m
+        labels:
+          severity: warning
+        annotations:
+          summary:     "API p95 latency is {{ $value }}s"
+          description: >
+            API p95 response time exceeds 1s for 5 minutes.
+            Current p95: {{ $value | humanizeDuration }}.
+
+      # in-flight 요청 급증 (50건 초과는 데모 환경에서 비정상)
+      - alert: ApiHighInFlightRequests
+        expr: api_http_requests_in_flight > 50
+        for:  1m
+        labels:
+          severity: warning
+        annotations:
+          summary:     "High in-flight API requests: {{ $value }}"
+          description: >
+            More than 50 requests are being processed simultaneously.
+            This may indicate a slow upstream or resource exhaustion.
+
+  # ── Collector 성능 ────────────────────────────────────────────────
+  - name: collector_performance
+    rules:
+      # 수집 실패율 20% 초과
+      - alert: CollectorHighFailureRate
+        expr: >
+          rate(collector_run_failures_total[5m])
+          / (rate(collector_run_total[5m]) + 0.001) > 0.20
+        for:  5m
+        labels:
+          severity: warning
+        annotations:
+          summary:     "Collector failure rate is {{ $value | humanizePercentage }}"
+          description: >
+            More than 20% of collection runs are failing.
+            Check MongoDB connectivity and adapter configuration.
+
+      # 5분간 한 번도 수집 안 됨
+      - alert: CollectorNotRunning
+        expr: increase(collector_run_total[5m]) == 0
+        for:  5m
+        labels:
+          severity: critical
+        annotations:
+          summary:     "Collector has not run in 5 minutes"
+          description: >
+            No collection cycles recorded in the last 5 minutes.
+            The collector worker may be stuck or crashed.
+
+      # 큐 대기 깊이 10 초과
+      - alert: CollectorQueueBacklog
+        expr: collector_queue_depth{state="waiting"} > 10
+        for:  2m
+        labels:
+          severity: warning
+        annotations:
+          summary:     "Collector queue backlog: {{ $value }} jobs waiting"
+          description: >
+            More than 10 jobs are waiting in the collector queue.
+            The worker may be too slow or Redis may be having issues.
+
+  # ── Detector 성능 ─────────────────────────────────────────────────
+  - name: detector_performance
+    rules:
+      # 5분간 탐지 실행 없음
+      - alert: DetectorNotRunning
+        expr: increase(detector_run_total[5m]) == 0
+        for:  5m
+        labels:
+          severity: critical
+        annotations:
+          summary:     "Detector has not run in 5 minutes"
+          description: >
+            No detection cycles recorded in the last 5 minutes.
+            Bottleneck events are not being generated.
+
+      # 열린 이벤트가 10개 초과 (데모 환경에서 비정상적으로 많음)
+      - alert: TooManyOpenEvents
+        expr: job:detector_open_events:current > 10
+        for:  10m
+        labels:
+          severity: info
+        annotations:
+          summary:     "{{ $value }} open bottleneck events"
+          description: >
+            More than 10 bottleneck events are currently open.
+            Consider reviewing the actuator policy and running approvals.
+
+  # ── Actuator 성능 ─────────────────────────────────────────────────
+  - name: actuator_performance
+    rules:
+      # 5분간 actuator 실행 없음
+      - alert: ActuatorNotRunning
+        expr: increase(actuator_run_total[5m]) == 0
+        for:  5m
+        labels:
+          severity: critical
+        annotations:
+          summary:     "Actuator has not run in 5 minutes"
+          description: >
+            No actuator evaluation cycles recorded in the last 5 minutes.
+            Pending actions are not being generated.
+
+      # 큐 대기 깊이 10 초과
+      - alert: ActuatorQueueBacklog
+        expr: actuator_queue_depth{state="waiting"} > 10
+        for:  2m
+        labels:
+          severity: warning
+        annotations:
+          summary:     "Actuator queue backlog: {{ $value }} jobs waiting"
+          description: >
+            More than 10 jobs are waiting in the actuator queue.
+
+  # ── 시스템 리소스 ─────────────────────────────────────────────────
+  - name: system_resources
+    rules:
+      # 힙 메모리 200MB 초과 (데모 환경 기준)
+      - alert: HighHeapMemory
+        expr: >
+          (
+            api_nodejs_heap_size_used_bytes
+            or collector_process_nodejs_heap_size_used_bytes
+            or detector_process_nodejs_heap_size_used_bytes
+            or actuator_process_nodejs_heap_size_used_bytes
+          ) / 1024 / 1024 > 200
+        for:  5m
+        labels:
+          severity: warning
+        annotations:
+          summary:     "High heap memory usage: {{ $value | humanize }}MB"
+          description: >
+            Node.js heap memory exceeds 200MB for job {{ $labels.job }}.
+            This may indicate a memory leak.
+
+      # 이벤트 루프 지연 100ms 초과
+      - alert: HighEventLoopLag
+        expr: >
+          (
+            api_nodejs_eventloop_lag_p99_seconds
+            or collector_process_nodejs_eventloop_lag_p99_seconds
+            or detector_process_nodejs_eventloop_lag_p99_seconds
+            or actuator_process_nodejs_eventloop_lag_p99_seconds
+          ) * 1000 > 100
+        for:  3m
+        labels:
+          severity: warning
+        annotations:
+          summary:     "High event loop lag: {{ $value | humanize }}ms"
+          description: >
+            Node.js event loop p99 lag exceeds 100ms for {{ $labels.job }}.
+            This indicates the process is CPU-bound or blocking.

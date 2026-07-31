@@ -1,0 +1,36 @@
+FROM node:20-alpine AS base
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+
+FROM base AS deps
+WORKDIR /app
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY workers/detector/package.json ./workers/detector/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/rules/package.json ./packages/rules/
+RUN pnpm install --frozen-lockfile
+
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/workers/detector/node_modules ./workers/detector/node_modules
+COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=deps /app/packages/rules/node_modules ./packages/rules/node_modules
+COPY tsconfig.base.json ./
+COPY packages/shared ./packages/shared
+COPY packages/rules ./packages/rules
+COPY workers/detector ./workers/detector
+RUN pnpm --filter @demo/shared build
+RUN pnpm --filter @demo/rules build
+RUN pnpm --filter @demo/worker-detector build
+
+FROM base AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=builder /app/packages/rules/dist ./packages/rules/dist
+COPY --from=builder /app/packages/rules/package.json ./packages/rules/package.json
+COPY --from=builder /app/workers/detector/dist ./dist
+EXPOSE 4011
+CMD ["node", "dist/index.js"]

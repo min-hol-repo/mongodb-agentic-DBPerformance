@@ -1,0 +1,43 @@
+{
+  "name": "@demo/scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "seed":       "tsx seed/seed-synthetic-metrics.ts",
+    "seed:full":  "tsx seed/seed-full-demo.ts",
+    "seed:reset": "SEED_RESET=true tsx seed/seed-full-demo.ts",
+    "seed:dry":   "SEED_DRY_RUN=true tsx seed/seed-full-demo.ts",
+
+    "demo":             "tsx demo/run-demo.ts",
+    "demo:normal":      "tsx demo/run-demo.ts --scenario=normal",
+    "demo:connection":  "tsx demo/run-demo.ts --scenario=connection_pressure",
+    "demo:query":       "tsx demo/run-demo.ts --scenario=query_inefficiency",
+    "demo:approval":    "tsx demo/run-demo.ts --scenario=approval_flow",
+    "demo:reset":       "tsx demo/run-demo.ts --reset",
+    "demo:dry":         "DEMO_DRY_RUN=true tsx demo/run-demo.ts",
+
+    "simulate:normal":     "tsx simulate/simulate.ts --scenario=normal",
+    "simulate:connection": "tsx simulate/simulate.ts --scenario=connection_pressure",
+    "simulate:query":      "tsx simulate/simulate.ts --scenario=query_inefficiency",
+    "simulate:approval":   "tsx simulate/simulate.ts --scenario=approval_flow",
+
+    "loadgen:normal":             "tsx loadgen/run.ts normal",
+    "loadgen:connection-surge":   "tsx loadgen/run.ts connection_surge",
+    "loadgen:cpu-saturation":     "tsx loadgen/run.ts cpu_saturation",
+    "loadgen:storage-pressure":   "tsx loadgen/run.ts storage_pressure",
+    "loadgen:query-inefficiency": "tsx loadgen/run.ts query_inefficiency"
+  },
+  "dependencies": {
+    "@demo/shared": "workspace:*",
+    "@demo/atlas":  "workspace:*",
+    "@demo/rules":  "workspace:*",
+    "mongodb":      "^6.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "dotenv":      "^16.4.0",
+    "tsx":         "^4.9.0",
+    "typescript":  "^5.4.0"
+  }
+}

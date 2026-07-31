@@ -1,0 +1,687 @@
+{
+  "title": "Agentic Demo — Ops Overview",
+  "uid": "ops-overview",
+  "description": "운영자 중심 스타터 대시보드 — App Health, Collector, Detector Events, Actuator Activity, High-Severity Bottlenecks",
+  "version": 1,
+  "schemaVersion": 38,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "tags": ["agentic", "demo", "ops", "overview"],
+  "links": [
+    {
+      "title": "Detailed Technical Dashboard",
+      "url": "/d/agentic-demo",
+      "icon": "external link",
+      "type": "link",
+      "targetBlank": false
+    }
+  ],
+
+  "panels": [
+
+    {
+      "id": 1000,
+      "type": "row",
+      "title": "🟢 App Health",
+      "description": "모든 서비스의 UP/DOWN 상태 및 API 성능 지표",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false
+    },
+
+    {
+      "id": 1,
+      "title": "Service Status",
+      "description": "각 서비스의 Prometheus 스크레이프 성공 여부 (UP=1, DOWN=0)",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 10, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",   "value": null },
+              { "color": "green", "value": 1    }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DOWN", "color": "red"   },
+                "1": { "text": "UP",   "color": "green" }
+              }
+            }
+          ]
+        }
+      },
+      "targets": [
+        { "expr": "up{job=\"api\"}",       "legendFormat": "API",       "instant": true },
+        { "expr": "up{job=\"collector\"}", "legendFormat": "Collector", "instant": true },
+        { "expr": "up{job=\"detector\"}",  "legendFormat": "Detector",  "instant": true },
+        { "expr": "up{job=\"actuator\"}",  "legendFormat": "Actuator",  "instant": true }
+      ]
+    },
+
+    {
+      "id": 2,
+      "title": "API Error Rate",
+      "description": "최근 1분 4xx/5xx 에러 비율 (0%=정상, 5%+=경고)",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 4, "x": 10, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 0.02 },
+              { "color": "red",    "value": 0.05 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(api_http_errors_total[1m])) / (sum(rate(api_http_requests_total[1m])) + 0.001)",
+          "legendFormat": "error rate"
+        }
+      ]
+    },
+
+    {
+      "id": 3,
+      "title": "API Latency p95",
+      "description": "최근 5분 p95 응답 시간",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 4, "x": 14, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 0.25 },
+              { "color": "red",    "value": 1.0  }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(api_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+
+    {
+      "id": 4,
+      "title": "In-Flight Requests",
+      "description": "현재 처리 중인 HTTP 요청 수",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 3, "x": 18, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 20   },
+              { "color": "red",    "value": 50   }
+            ]
+          }
+        }
+      },
+      "targets": [
+        { "expr": "api_http_requests_in_flight", "legendFormat": "in-flight" }
+      ]
+    },
+
+    {
+      "id": 5,
+      "title": "API Request Rate",
+      "description": "route별 요청 속도 추이",
+      "type": "timeseries",
+      "gridPos": { "h": 5, "w": 3, "x": 21, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "min": 0 }
+      },
+      "options": { "legend": { "displayMode": "hidden" } },
+      "targets": [
+        { "expr": "sum(rate(api_http_requests_total[1m]))", "legendFormat": "req/s" }
+      ]
+    },
+
+    {
+      "id": 2000,
+      "type": "row",
+      "title": "📦 Collector Health",
+      "description": "메트릭 수집 사이클 성공률, 처리량, 큐 상태",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "collapsed": false
+    },
+
+    {
+      "id": 11,
+      "title": "Collection Success Rate",
+      "description": "수집 성공률 (5분 슬라이딩 윈도우). 100%=완전 정상",
+      "type": "gauge",
+      "gridPos": { "h": 7, "w": 5, "x": 0, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "minVizWidth":  75,
+        "minVizHeight": 75,
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "yellow", "value": 0.8  },
+              { "color": "green",  "value": 0.95 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "1 - (rate(collector_run_failures_total[5m]) / (rate(collector_run_total[5m]) + 0.001))",
+          "legendFormat": "success rate"
+        }
+      ]
+    },
+
+    {
+      "id": 12,
+      "title": "Metrics Inserted / min",
+      "description": "MongoDB atlas_metrics_ts 에 삽입된 문서 수 (분당)",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 7, "x": 5, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0 },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "inserted/min" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] }
+        ]
+      },
+      "targets": [
+        { "expr": "rate(collector_inserted_total[1m]) * 60", "legendFormat": "inserted/min" },
+        { "expr": "rate(collector_run_failures_total[1m]) * 60", "legendFormat": "failures/min" }
+      ]
+    },
+
+    {
+      "id": 13,
+      "title": "Collector Queue Depth",
+      "description": "BullMQ 큐 대기 및 처리 중인 job 수. 지속적으로 쌓이면 워커 지연 의심",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 6, "x": 12, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0 },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "waiting" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "active" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }] }
+        ]
+      },
+      "targets": [
+        { "expr": "collector_queue_depth{state=\"waiting\"}", "legendFormat": "waiting" },
+        { "expr": "collector_queue_depth{state=\"active\"}",  "legendFormat": "active"  }
+      ]
+    },
+
+    {
+      "id": 14,
+      "title": "Run Duration p95 (s)",
+      "description": "수집 1회 실행 소요 시간 p95",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 3, "x": 18, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 0.5  },
+              { "color": "red",    "value": 2.0  }
+            ]
+          }
+        }
+      },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, rate(collector_run_duration_seconds_bucket[5m]))", "legendFormat": "p95" }
+      ]
+    },
+
+    {
+      "id": 15,
+      "title": "Inserted (1h)",
+      "description": "지난 1시간 MongoDB 삽입 누계",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 21, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        { "expr": "increase(collector_inserted_total[1h])", "legendFormat": "inserted" }
+      ]
+    },
+
+    {
+      "id": 16,
+      "title": "Failures (1h)",
+      "description": "지난 1시간 수집 실패 횟수",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 3, "x": 18, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1    },
+              { "color": "red",    "value": 5    }
+            ]
+          }
+        }
+      },
+      "targets": [
+        { "expr": "increase(collector_run_failures_total[1h])", "legendFormat": "failures" }
+      ]
+    },
+
+    {
+      "id": 3000,
+      "type": "row",
+      "title": "🔍 Detector Event Volume",
+      "description": "병목 이벤트 생성·해소·에스컬레이션 처리량",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "collapsed": false
+    },
+
+    {
+      "id": 21,
+      "title": "Events Created / hour (by type & severity)",
+      "description": "탐지된 병목 이벤트 추이. 각 선은 bottleneck type + severity 조합",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0, "custom": { "fillOpacity": 15 } }
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum", "lastNotNull"] }
+      },
+      "targets": [
+        { "expr": "increase(detector_events_total[1h])", "legendFormat": "{{ type }} / {{ severity }}" }
+      ]
+    },
+
+    {
+      "id": 22,
+      "title": "Open Events",
+      "description": "현재 열려있는 (open 상태) 병목 이벤트 수",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 5, "x": 14, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1    },
+              { "color": "red",    "value": 3    }
+            ]
+          }
+        }
+      },
+      "targets": [
+        { "expr": "sum(detector_open_events)", "legendFormat": "open" }
+      ]
+    },
+
+    {
+      "id": 23,
+      "title": "Resolved (1h)",
+      "description": "지난 1시간 자동 해소된 이벤트 수",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 5, "x": 19, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        { "expr": "sum(increase(detector_events_resolved_total[1h]))", "legendFormat": "resolved" }
+      ]
+    },
+
+    {
+      "id": 24,
+      "title": "Escalated (1h)",
+      "description": "지난 1시간 심각도가 상향된 이벤트 수",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 5, "x": 14, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1    },
+              { "color": "red",    "value": 3    }
+            ]
+          }
+        }
+      },
+      "targets": [
+        { "expr": "sum(increase(detector_events_escalated_total[1h]))", "legendFormat": "escalated" }
+      ]
+    },
+
+    {
+      "id": 25,
+      "title": "Detector Run p95 (s)",
+      "description": "탐지 사이클 1회 소요 시간 p95",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 5, "x": 19, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 0.5  },
+              { "color": "red",    "value": 2.0  }
+            ]
+          }
+        }
+      },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, rate(detector_run_duration_seconds_bucket[5m]))", "legendFormat": "p95" }
+      ]
+    },
+
+    {
+      "id": 4000,
+      "type": "row",
+      "title": "⚡ Actuator Activity",
+      "description": "액추에이터 정책 평가·액션 생성·승인/거절 처리 현황",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "collapsed": false
+    },
+
+    {
+      "id": 31,
+      "title": "Actions Created (by type / mode)",
+      "description": "생성된 액션 추이 (dry_run=시뮬레이션, approval_required=승인 대기)",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0, "custom": { "fillOpacity": 10 } }
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] }
+      },
+      "targets": [
+        { "expr": "increase(actuator_actions_total[1h])", "legendFormat": "{{ action_type }} / {{ mode }}" }
+      ]
+    },
+
+    {
+      "id": 32,
+      "title": "Pending Approvals",
+      "description": "현재 승인 대기 중인 액션 수 (approval_required 모드)",
+      "type": "stat",
+      "gridPos": { "h": 7, "w": 4, "x": 12, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1    },
+              { "color": "red",    "value": 5    }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(actuator_actions_total{mode=\"approval_required\"}[24h])) - sum(increase(actuator_approvals_total[24h]))",
+          "legendFormat": "pending"
+        }
+      ]
+    },
+
+    {
+      "id": 33,
+      "title": "Approvals / Rejections (1h)",
+      "description": "지난 1시간 운영자가 처리한 승인 및 거절 수",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 4, "x": 16, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        { "expr": "increase(actuator_approvals_total{decision=\"approved\"}[1h])", "legendFormat": "approved ✓" },
+        { "expr": "increase(actuator_approvals_total{decision=\"rejected\"}[1h])", "legendFormat": "rejected ✗" }
+      ]
+    },
+
+    {
+      "id": 34,
+      "title": "Actions Skipped (1h)",
+      "description": "가드레일에 의해 스킵된 액션 수 (쿨다운, 중복 방지 등)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      },
+      "targets": [
+        { "expr": "increase(actuator_actions_skipped_total[1h])", "legendFormat": "{{ reason }}" }
+      ]
+    },
+
+    {
+      "id": 35,
+      "title": "Actuator Run p95 (s)",
+      "description": "액추에이터 평가 사이클 소요 시간 p95",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 27 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 0.5  },
+              { "color": "red",    "value": 2.0  }
+            ]
+          }
+        }
+      },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, rate(actuator_run_duration_seconds_bucket[5m]))", "legendFormat": "p95" }
+      ]
+    },
+
+    {
+      "id": 5000,
+      "type": "row",
+      "title": "🚨 Recent High-Severity Bottlenecks",
+      "description": "최근 발생한 심각도 높은 병목 현상 추이 및 빈도",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 31 },
+      "collapsed": false
+    },
+
+    {
+      "id": 41,
+      "title": "High-Severity Events — Trend",
+      "description": "시간 축에서 high severity 이벤트의 발생 추이 (type별 색 구분)",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 15, "x": 0, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": { "fillOpacity": 30, "lineWidth": 2, "drawStyle": "bars", "barAlignment": 0 }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "connection_pressure" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "cpu_saturation" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "storage_bottleneck" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "purple", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "query_inefficiency" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum", "max"] }
+      },
+      "targets": [
+        { "expr": "increase(detector_events_total{severity=\"high\"}[30m])", "legendFormat": "{{ type }}" }
+      ]
+    },
+
+    {
+      "id": 42,
+      "title": "High-Severity Count (1h)",
+      "description": "지난 1시간 내 발생한 high severity 이벤트 유형별 합계",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 9, "x": 15, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1    },
+              { "color": "red",    "value": 3    }
+            ]
+          }
+        }
+      },
+      "targets": [
+        { "expr": "sum(increase(detector_events_total{severity=\"high\", type=\"connection_pressure\"}[1h]))",  "legendFormat": "Connection Pressure", "instant": true },
+        { "expr": "sum(increase(detector_events_total{severity=\"high\", type=\"cpu_saturation\"}[1h]))",       "legendFormat": "CPU Saturation",      "instant": true },
+        { "expr": "sum(increase(detector_events_total{severity=\"high\", type=\"storage_bottleneck\"}[1h]))",  "legendFormat": "Storage Bottleneck",  "instant": true },
+        { "expr": "sum(increase(detector_events_total{severity=\"high\", type=\"query_inefficiency\"}[1h]))",  "legendFormat": "Query Inefficiency",  "instant": true }
+      ]
+    },
+
+    {
+      "id": 43,
+      "title": "Total High-Severity (1h)",
+      "description": "지난 1시간 high severity 이벤트 총합. 3건 이상이면 즉각 검토 필요",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 9, "x": 15, "y": 37 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "displayName": "High-Severity Events",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1    },
+              { "color": "orange", "value": 3    },
+              { "color": "red",    "value": 5    }
+            ]
+          }
+        }
+      },
+      "targets": [
+        { "expr": "sum(increase(detector_events_total{severity=\"high\"}[1h]))", "legendFormat": "total" }
+      ]
+    }
+
+  ]
+}

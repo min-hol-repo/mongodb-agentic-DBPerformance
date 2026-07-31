@@ -1,0 +1,142 @@
+# ── Recording Rules ──────────────────────────────────────────────
+# 자주 사용되는 PromQL 집계를 사전 계산한다.
+# Grafana 대시보드 로딩 속도와 쿼리 성능을 향상시킨다.
+#
+# 네이밍 규칙: <aggregation>:<metric>:<window>
+#   - job:   job 전체 집계
+#   - route: route 별 집계
+
+groups:
+
+  # ── API 메트릭 ────────────────────────────────────────────────────
+  - name: api.rules
+    interval: 30s
+    rules:
+      # 전체 요청 속도 (req/s)
+      - record: job:api_http_requests_total:rate1m
+        expr: sum(rate(api_http_requests_total[1m]))
+
+      # route별 요청 속도
+      - record: route:api_http_requests_total:rate1m
+        expr: sum(rate(api_http_requests_total[1m])) by (route, method)
+
+      # 전체 에러 속도 (4xx+5xx req/s)
+      - record: job:api_http_errors_total:rate1m
+        expr: sum(rate(api_http_errors_total[1m]))
+
+      # 에러율 (0–1)
+      - record: job:api_http_error_ratio:rate1m
+        expr: >
+          sum(rate(api_http_errors_total[1m]))
+          /
+          (sum(rate(api_http_requests_total[1m])) + 0.001)
+
+      # p50 latency
+      - record: job:api_http_request_duration_seconds:p50_5m
+        expr: >
+          histogram_quantile(0.50,
+            sum(rate(api_http_request_duration_seconds_bucket[5m])) by (le))
+
+      # p95 latency
+      - record: job:api_http_request_duration_seconds:p95_5m
+        expr: >
+          histogram_quantile(0.95,
+            sum(rate(api_http_request_duration_seconds_bucket[5m])) by (le))
+
+      # p99 latency
+      - record: job:api_http_request_duration_seconds:p99_5m
+        expr: >
+          histogram_quantile(0.99,
+            sum(rate(api_http_request_duration_seconds_bucket[5m])) by (le))
+
+  # ── Collector 메트릭 ──────────────────────────────────────────────
+  - name: collector.rules
+    interval: 60s
+    rules:
+      # 수집 성공률 (0–1)
+      - record: job:collector_success_ratio:rate5m
+        expr: >
+          1 - (
+            rate(collector_run_failures_total[5m])
+            /
+            (rate(collector_run_total[5m]) + 0.001)
+          )
+
+      # 수집 속도 (runs/min)
+      - record: job:collector_run_total:rate1m
+        expr: rate(collector_run_total[1m]) * 60
+
+      # 삽입 속도 (docs/min)
+      - record: job:collector_inserted_total:rate1m
+        expr: rate(collector_inserted_total[1m]) * 60
+
+      # p95 수집 소요시간
+      - record: job:collector_run_duration_seconds:p95_5m
+        expr: >
+          histogram_quantile(0.95,
+            rate(collector_run_duration_seconds_bucket[5m]))
+
+  # ── Detector 메트릭 ───────────────────────────────────────────────
+  - name: detector.rules
+    interval: 60s
+    rules:
+      # 탐지 실패율 (0–1)
+      - record: job:detector_failure_ratio:rate5m
+        expr: >
+          rate(detector_run_failures_total[5m])
+          /
+          (rate(detector_run_total[5m]) + 0.001)
+
+      # 시간당 신규 이벤트 수
+      - record: job:detector_events_total:rate1h
+        expr: sum(increase(detector_events_total[1h]))
+
+      # 시간당 자동 해소 수
+      - record: job:detector_events_resolved_total:rate1h
+        expr: sum(increase(detector_events_resolved_total[1h]))
+
+      # 현재 열린 이벤트 수
+      - record: job:detector_open_events:current
+        expr: sum(detector_open_events)
+
+      # p95 탐지 소요시간
+      - record: job:detector_run_duration_seconds:p95_5m
+        expr: >
+          histogram_quantile(0.95,
+            rate(detector_run_duration_seconds_bucket[5m]))
+
+  # ── Actuator 메트릭 ───────────────────────────────────────────────
+  - name: actuator.rules
+    interval: 60s
+    rules:
+      # 시간당 액션 생성 수
+      - record: job:actuator_actions_total:rate1h
+        expr: sum(increase(actuator_actions_total[1h]))
+
+      # 시간당 스킵된 액션 수
+      - record: job:actuator_actions_skipped_total:rate1h
+        expr: sum(increase(actuator_actions_skipped_total[1h]))
+
+      # p95 평가 소요시간
+      - record: job:actuator_run_duration_seconds:p95_5m
+        expr: >
+          histogram_quantile(0.95,
+            rate(actuator_run_duration_seconds_bucket[5m]))
+
+  # ── 큐 깊이 통합 ──────────────────────────────────────────────────
+  - name: queue.rules
+    interval: 30s
+    rules:
+      # 전체 워커 대기 큐 합산
+      - record: job:queue_depth_waiting:current
+        expr: >
+          sum(collector_queue_depth{state="waiting"})
+          + sum(detector_queue_depth{state="waiting"})
+          + sum(actuator_queue_depth{state="waiting"})
+
+      # 전체 워커 활성 큐 합산
+      - record: job:queue_depth_active:current
+        expr: >
+          sum(collector_queue_depth{state="active"})
+          + sum(detector_queue_depth{state="active"})
+          + sum(actuator_queue_depth{state="active"})

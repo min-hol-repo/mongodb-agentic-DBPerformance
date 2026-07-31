@@ -1,0 +1,153 @@
+# 전체 스택 기동 파일 (앱 + 인프라)
+# 로컬 개발 시 인프라만 필요하다면 docker-compose.infra.yml 을 사용하세요.
+# (BullMQ → Agenda(MongoDB) 전환으로 Redis 의존성 제거됨)
+#
+# 사용법:
+#   docker compose -f infra/docker/docker-compose.yml up -d
+#   docker compose -f infra/docker/docker-compose.yml down -v
+
+services:
+
+  # ── 인프라 ─────────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: demo-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../prometheus/rules:/etc/prometheus/rules:ro        # recording + alert rules
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle                              # POST /-/reload 로 설정 핫 리로드
+      - --web.console.libraries=/usr/share/prometheus/console_libraries
+      - --web.console.templates=/usr/share/prometheus/consoles
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.4.3
+    container_name: demo-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_TELEMETRY_REPORTING_ENABLED=false
+      - GF_LOG_LEVEL=warn
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/agentic-demo.json
+    volumes:
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  # ── 앱 서비스 ──────────────────────────────────────────────────────
+
+  api:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.api
+    container_name: demo-api
+    ports:
+      - "4000:4000"
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=4000
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.web
+    container_name: demo-web
+    ports:
+      - "3000:3000"
+    environment:
+      - API_INTERNAL_URL=http://api:4000
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  collector:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.collector
+    container_name: demo-collector
+    ports:
+      - "4010:4010"
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      - COLLECTOR_ADAPTER=mock
+      - COLLECTOR_METRICS_PORT=4010
+    restart: unless-stopped
+
+  detector:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.detector
+    container_name: demo-detector
+    ports:
+      - "4011:4011"
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      - DETECTOR_METRICS_PORT=4011
+    restart: unless-stopped
+
+  actuator:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.actuator
+    container_name: demo-actuator
+    ports:
+      - "4012:4012"
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      - ACTUATOR_MODE=dry_run
+      - ACTUATOR_METRICS_PORT=4012
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:

@@ -1,0 +1,125 @@
+# ── Prometheus 스크레이프 설정 (Docker Compose 전체 스택) ──────────
+# 앱 서비스는 같은 Docker 네트워크 내 컨테이너 이름으로 접근한다.
+#
+# 설계 원칙:
+#   - API는 15s 간격으로 자주 수집 (HTTP 요청 메트릭 실시간성)
+#   - Worker는 30s 간격으로 수집 (배치 처리 특성)
+#   - relabel_configs로 instance 레이블을 서비스명으로 정규화
+#   - metric_relabel_configs로 high-cardinality 내부 메트릭 제거
+#   - Recording Rules로 자주 쓰이는 집계를 사전 계산
+
+global:
+  scrape_interval:     15s    # 기본 수집 간격
+  scrape_timeout:      10s    # 수집 타임아웃
+  evaluation_interval: 15s   # 룰 평가 간격
+  external_labels:
+    env:     'docker'
+    project: 'agentic-demo'
+
+# ── 룰 파일 ──────────────────────────────────────────────────────
+rule_files:
+  - 'rules/recording.yml'
+  - 'rules/alerts.yml'
+
+# ── 스크레이프 타겟 ───────────────────────────────────────────────
+scrape_configs:
+
+  # ── API 서버 ────────────────────────────────────────────────────
+  # HTTP 요청 메트릭이 핵심이므로 15s 간격 유지.
+  # /metrics 엔드포인트는 Fastify 앱 자체에서 노출한다.
+  - job_name: 'api'
+    scrape_interval: 15s
+    metrics_path:    '/metrics'
+    static_configs:
+      - targets: ['api:4000']
+        labels:
+          service:  'api'
+          component: 'http-server'
+    relabel_configs:
+      # instance 레이블을 host:port 대신 서비스명으로 단순화
+      - source_labels: [__address__]
+        regex:         '(.*):.*'
+        target_label:  instance
+        replacement:   'api'
+    metric_relabel_configs:
+      # Node.js 내부 GC 세부 메트릭은 카디널리티가 높아 제거
+      - source_labels: [__name__]
+        regex: 'api_nodejs_gc_duration_seconds_bucket'
+        action: drop
+      # 불필요한 Go/Node 런타임 세부 메트릭 제거
+      - source_labels: [__name__]
+        regex: 'api_(nodejs_heap_space_size|nodejs_version_info).*'
+        action: drop
+
+  # ── Collector 워커 ───────────────────────────────────────────────
+  # 30초마다 수집. 수집 사이클 자체가 30s이므로 2배 여유를 두면 충분.
+  # 포트 4010: collector 워커의 prom-client HTTP 서버
+  - job_name: 'collector'
+    scrape_interval: 30s
+    metrics_path:    '/metrics'
+    static_configs:
+      - targets: ['collector:4010']
+        labels:
+          service:   'collector'
+          component: 'worker'
+    relabel_configs:
+      - source_labels: [__address__]
+        regex:         '(.*):.*'
+        target_label:  instance
+        replacement:   'collector'
+    metric_relabel_configs:
+      # 프로세스 내부 GC 세부 제거
+      - source_labels: [__name__]
+        regex: 'collector_process_nodejs_gc_duration_seconds_bucket'
+        action: drop
+      - source_labels: [__name__]
+        regex: 'collector_process_(nodejs_heap_space_size|nodejs_version_info).*'
+        action: drop
+
+  # ── Detector 워커 ────────────────────────────────────────────────
+  # 60초마다 실행되는 워커이므로 30s 수집으로 충분.
+  # 포트 4011
+  - job_name: 'detector'
+    scrape_interval: 30s
+    metrics_path:    '/metrics'
+    static_configs:
+      - targets: ['detector:4011']
+        labels:
+          service:   'detector'
+          component: 'worker'
+    relabel_configs:
+      - source_labels: [__address__]
+        regex:         '(.*):.*'
+        target_label:  instance
+        replacement:   'detector'
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'detector_process_nodejs_gc_duration_seconds_bucket'
+        action: drop
+      - source_labels: [__name__]
+        regex: 'detector_process_(nodejs_heap_space_size|nodejs_version_info).*'
+        action: drop
+
+  # ── Actuator 워커 ────────────────────────────────────────────────
+  # 60초마다 실행. 30s 수집으로 충분.
+  # 포트 4012
+  - job_name: 'actuator'
+    scrape_interval: 30s
+    metrics_path:    '/metrics'
+    static_configs:
+      - targets: ['actuator:4012']
+        labels:
+          service:   'actuator'
+          component: 'worker'
+    relabel_configs:
+      - source_labels: [__address__]
+        regex:         '(.*):.*'
+        target_label:  instance
+        replacement:   'actuator'
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'actuator_process_nodejs_gc_duration_seconds_bucket'
+        action: drop
+      - source_labels: [__name__]
+        regex: 'actuator_process_(nodejs_heap_space_size|nodejs_version_info).*'
+        action: drop

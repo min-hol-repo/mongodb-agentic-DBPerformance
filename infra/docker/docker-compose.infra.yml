@@ -1,0 +1,76 @@
+# 로컬 개발용 인프라 단독 기동 파일
+# 앱 이미지 빌드 없이 Prometheus / Grafana 만 올릴 때 사용
+# (BullMQ → Agenda(MongoDB) 전환으로 Redis 의존성 제거됨)
+#
+# 사용법:
+#   docker compose -f infra/docker/docker-compose.infra.yml up -d
+#   docker compose -f infra/docker/docker-compose.infra.yml down
+#
+# 앱은 로컬에서 pnpm dev 로 실행하고,
+# Prometheus는 host.docker.internal 을 통해 로컬 앱 메트릭을 수집한다.
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: demo-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../prometheus/prometheus.dev.yml:/etc/prometheus/prometheus.yml:ro
+      - ../prometheus/rules:/etc/prometheus/rules:ro        # recording + alert rules
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle                              # POST /-/reload 로 설정 핫 리로드 가능
+      - --web.console.libraries=/usr/share/prometheus/console_libraries
+      - --web.console.templates=/usr/share/prometheus/consoles
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.4.3
+    container_name: demo-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      # 보안
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      # 데모용 익명 접근 허용 (로그인 없이 대시보드 열람 가능)
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
+      # 불필요한 기능 비활성화
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_TELEMETRY_REPORTING_ENABLED=false
+      # 로그 수준
+      - GF_LOG_LEVEL=warn
+      # 홈 대시보드
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/agentic-demo.json
+    volumes:
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:

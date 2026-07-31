@@ -1,0 +1,120 @@
+# ── Prometheus 스크레이프 설정 (로컬 개발 환경) ────────────────────
+# 앱은 host.docker.internal 을 통해 접근한다.
+# Prometheus 컨테이너는 infra/docker/docker-compose.infra.yml 로 실행한다.
+#
+# macOS / Windows: host.docker.internal 자동 지원
+# Linux: docker-compose.infra.yml 의 prometheus 서비스에 아래 추가 필요:
+#   extra_hosts:
+#     - "host.docker.internal:host-gateway"
+#
+# 사용법:
+#   docker compose -f infra/docker/docker-compose.infra.yml up -d
+#   pnpm dev  (앱은 로컬에서 실행)
+
+global:
+  scrape_interval:     15s
+  scrape_timeout:      10s
+  evaluation_interval: 15s
+  external_labels:
+    env:     'local'
+    project: 'agentic-demo'
+
+# ── 룰 파일 ──────────────────────────────────────────────────────
+rule_files:
+  - 'rules/recording.yml'
+  - 'rules/alerts.yml'
+
+# ── 스크레이프 타겟 ───────────────────────────────────────────────
+scrape_configs:
+
+  # ── API 서버 ────────────────────────────────────────────────────
+  # pnpm --filter @demo/api dev 로 기동 후 :4000/metrics 에서 수집
+  - job_name: 'api'
+    scrape_interval: 15s
+    metrics_path:    '/metrics'
+    static_configs:
+      - targets: ['host.docker.internal:4000']
+        labels:
+          service:   'api'
+          component: 'http-server'
+    relabel_configs:
+      - source_labels: [__address__]
+        regex:         '(.*):.*'
+        target_label:  instance
+        replacement:   'api'
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'api_nodejs_gc_duration_seconds_bucket'
+        action: drop
+      - source_labels: [__name__]
+        regex: 'api_(nodejs_heap_space_size|nodejs_version_info).*'
+        action: drop
+
+  # ── Collector 워커 ───────────────────────────────────────────────
+  # pnpm --filter @demo/worker-collector dev 로 기동 후 :4010/metrics
+  - job_name: 'collector'
+    scrape_interval: 30s
+    metrics_path:    '/metrics'
+    static_configs:
+      - targets: ['host.docker.internal:4010']
+        labels:
+          service:   'collector'
+          component: 'worker'
+    relabel_configs:
+      - source_labels: [__address__]
+        regex:         '(.*):.*'
+        target_label:  instance
+        replacement:   'collector'
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'collector_process_nodejs_gc_duration_seconds_bucket'
+        action: drop
+      - source_labels: [__name__]
+        regex: 'collector_process_(nodejs_heap_space_size|nodejs_version_info).*'
+        action: drop
+
+  # ── Detector 워커 ────────────────────────────────────────────────
+  # :4011/metrics
+  - job_name: 'detector'
+    scrape_interval: 30s
+    metrics_path:    '/metrics'
+    static_configs:
+      - targets: ['host.docker.internal:4011']
+        labels:
+          service:   'detector'
+          component: 'worker'
+    relabel_configs:
+      - source_labels: [__address__]
+        regex:         '(.*):.*'
+        target_label:  instance
+        replacement:   'detector'
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'detector_process_nodejs_gc_duration_seconds_bucket'
+        action: drop
+      - source_labels: [__name__]
+        regex: 'detector_process_(nodejs_heap_space_size|nodejs_version_info).*'
+        action: drop
+
+  # ── Actuator 워커 ────────────────────────────────────────────────
+  # :4012/metrics
+  - job_name: 'actuator'
+    scrape_interval: 30s
+    metrics_path:    '/metrics'
+    static_configs:
+      - targets: ['host.docker.internal:4012']
+        labels:
+          service:   'actuator'
+          component: 'worker'
+    relabel_configs:
+      - source_labels: [__address__]
+        regex:         '(.*):.*'
+        target_label:  instance
+        replacement:   'actuator'
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'actuator_process_nodejs_gc_duration_seconds_bucket'
+        action: drop
+      - source_labels: [__name__]
+        regex: 'actuator_process_(nodejs_heap_space_size|nodejs_version_info).*'
+        action: drop
