@@ -73,7 +73,6 @@ This project is **not** a replacement for Atlas native autoscaling. It is a **hi
                     └─────────────────┘    └─────────────┘
 
          All workers scheduled via MongoDB (agendaJobs collection)
-                         — No Redis required —
 ```
 
 ### Components
