@@ -112,7 +112,7 @@ Atlas 기본 자동 스케일링을 대체하는 것이 아니라, 그 위에서
 | 관찰 가능성 | prom-client, Prometheus, Grafana |
 | 모노레포 | pnpm workspaces, Turborepo |
 
-> **Redis 불필요.** 잡 스케줄링은 동일한 MongoDB Atlas 클러스터를 백엔드로 사용하는 Agenda로 처리합니다.
+> 잡 스케줄링은 동일한 MongoDB Atlas 클러스터를 백엔드로 사용하는 Agenda로 처리합니다.
 
 ---
 
