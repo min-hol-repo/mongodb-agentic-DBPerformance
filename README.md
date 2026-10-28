@@ -112,7 +112,7 @@ This project is **not** a replacement for Atlas native autoscaling. It is a **hi
 | Observability | prom-client, Prometheus, Grafana |
 | Monorepo | pnpm workspaces, Turborepo |
 
-> **No Redis.** Job scheduling is handled by Agenda backed by the same MongoDB Atlas cluster.
+> Job scheduling is handled by Agenda backed by the same MongoDB Atlas cluster.
 
 ---
 
